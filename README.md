@@ -1,2 +1,2 @@
 # Duel-Arena
-Raw ,Papaer , Scissor game on your pc or mobile now . 
+Raw ,Paper  , Scissor game on your pc or mobile now . 
