@@ -5,78 +5,157 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rock Paper Scissors — Duel Arena</title>
 
-  <!-- Fonts: Orbitron for the arcade-style headings, Inter for readable body text -->
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
-  <!-- Link the CSS file -->
+  <!-- CSS -->
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- Subtle retro CRT scanline overlay, purely decorative -->
   <div class="scanlines"></div>
+  <div class="app">
 
-  <!-- Scoreboard -->
-  <header class="scoreboard">
-    <div class="score-box you">
-      <span class="score-label">You</span>
-      <span class="score-value" id="playerScore">0</span>
-    </div>
-    <div class="score-box round">
-      <span class="score-label">Round</span>
-      <span class="score-value" id="roundCount">0</span>
-    </div>
-    <div class="score-box cpu">
-      <span class="score-label">CPU</span>
-      <span class="score-value" id="cpuScore">0</span>
-    </div>
-  </header>
+    <!-- ================= SCREEN 1: PROFILE SETUP ================= -->
+    <section class="screen active" id="screen-profile">
+      <h1 class="title small">Set Up Your Profile</h1>
 
-  <main class="arena" id="arena">
-    <h1 class="title">ROCK <span class="dash">/</span> PAPER <span class="dash">/</span> SCISSORS</h1>
+      <div class="avatar-picker">
+        <div class="avatar-preview" id="avatarPreview">😀</div>
+        <input type="file" id="avatarUpload" accept="image/*" hidden>
+        <button class="ghost-btn" id="uploadAvatarBtn">Upload Photo</button>
 
-    <!-- The duel: player hand, VS divider, CPU hand -->
-    <div class="duel" id="duel">
-      <div class="fighter player" id="playerHand">
-        <div class="hand-emoji" id="playerEmoji">✊</div>
-        <span class="fighter-label">You</span>
+        <div class="emoji-row" id="emojiRow">
+          <button class="emoji-option" data-emoji="😀" aria-label="Smiley avatar">😀</button>
+          <button class="emoji-option" data-emoji="🦊" aria-label="Fox avatar">🦊</button>
+          <button class="emoji-option" data-emoji="🐼" aria-label="Panda avatar">🐼</button>
+          <button class="emoji-option" data-emoji="🐸" aria-label="Frog avatar">🐸</button>
+          <button class="emoji-option" data-emoji="🤖" aria-label="Robot avatar">🤖</button>
+          <button class="emoji-option" data-emoji="👾" aria-label="Alien avatar">👾</button>
+        </div>
       </div>
 
-      <div class="vs-divider" id="vsDivider">VS</div>
+      <label class="field-label" for="nameInput">Your Name</label>
+      <input type="text" id="nameInput" maxlength="16" placeholder="Enter your name">
 
-      <div class="fighter cpu" id="cpuHand">
-        <div class="hand-emoji" id="cpuEmoji">✊</div>
-        <span class="fighter-label">CPU</span>
+      <button class="primary-btn" id="profileContinueBtn">Continue</button>
+    </section>
+
+    <!-- ================= SCREEN 2: MODE SELECT ================= -->
+    <section class="screen" id="screen-mode">
+      <h1 class="title small">Choose Mode</h1>
+
+      <button class="mode-btn" id="vsComputerBtn">
+        <span class="mode-emoji">🤖</span>
+        <span>Play vs Computer</span>
+      </button>
+
+      <button class="mode-btn" id="vsOnlineBtn">
+        <span class="mode-emoji">🌐</span>
+        <span>Play Online with a Friend</span>
+      </button>
+
+      <button class="ghost-btn" id="editProfileFromModeBtn">Edit Profile</button>
+    </section>
+
+    <!-- ================= SCREEN 3: ONLINE LOBBY ================= -->
+    <section class="screen" id="screen-online-lobby">
+      <h1 class="title small">Play Online</h1>
+
+      <div class="lobby-tabs">
+        <button class="tab-btn active" id="hostTabBtn">Host Game</button>
+        <button class="tab-btn" id="joinTabBtn">Join Game</button>
       </div>
-    </div>
 
-    <p class="result-banner" id="resultBanner">Choose your move</p>
+      <div class="lobby-panel" id="hostPanel">
+        <p class="lobby-text">Share this code with your friend:</p>
+        <div class="room-code" id="roomCodeDisplay">------</div>
+        <button class="ghost-btn" id="copyCodeBtn">Copy Code</button>
+        <p class="status-text" id="hostStatusText">Setting up your room...</p>
+      </div>
 
-    <!-- Choice buttons -->
-    <div class="choices">
-      <button class="choice-btn" data-choice="rock" aria-label="Play Rock">
-        <span class="choice-emoji">✊</span>
-        <span class="choice-name">Rock</span>
-      </button>
-      <button class="choice-btn" data-choice="paper" aria-label="Play Paper">
-        <span class="choice-emoji">✋</span>
-        <span class="choice-name">Paper</span>
-      </button>
-      <button class="choice-btn" data-choice="scissors" aria-label="Play Scissors">
-        <span class="choice-emoji">✌️</span>
-        <span class="choice-name">Scissors</span>
-      </button>
-    </div>
+      <div class="lobby-panel hidden" id="joinPanel">
+        <p class="lobby-text">Enter your friend's code:</p>
+        <input type="text" id="joinCodeInput" maxlength="6" placeholder="ABC123" autocapitalize="characters">
+        <button class="primary-btn" id="joinBtn">Join Game</button>
+        <p class="status-text" id="joinStatusText"></p>
+      </div>
 
-    <button class="reset-btn" id="resetBtn">Reset Match</button>
-    <p class="hint">Tip: keys 1 / 2 / 3 also work</p>
-  </main>
+      <button class="ghost-btn" id="backToModeBtn">Back</button>
+    </section>
 
-  <!-- Confetti particles get injected here by JS on a win -->
+    <!-- ================= SCREEN 4: GAME ================= -->
+    <section class="screen" id="screen-game">
+
+      <div class="game-topbar">
+        <button class="ghost-btn small-btn" id="leaveGameBtn">← Leave</button>
+        <span class="connection-pill neutral" id="connectionPill">vs Computer</span>
+        <button class="ghost-btn small-btn" id="editProfileFromGameBtn">✏️ Profile</button>
+      </div>
+
+      <header class="scoreboard">
+        <div class="score-box you">
+          <div class="score-avatar" id="youAvatarBox">😀</div>
+          <span class="score-label" id="youNameLabel">You</span>
+          <span class="score-value" id="playerScore">0</span>
+        </div>
+        <div class="score-box round">
+          <span class="score-label">Round</span>
+          <span class="score-value" id="roundCount">0</span>
+        </div>
+        <div class="score-box cpu">
+          <div class="score-avatar" id="opponentAvatarBox">🤖</div>
+          <span class="score-label" id="opponentNameLabel">CPU</span>
+          <span class="score-value" id="cpuScore">0</span>
+        </div>
+      </header>
+
+      <main class="arena" id="arena">
+        <h1 class="title">ROCK <span class="dash">/</span> PAPER <span class="dash">/</span> SCISSORS</h1>
+
+        <div class="duel" id="duel">
+          <div class="fighter player" id="playerHand">
+            <div class="hand-emoji" id="playerEmoji">✊</div>
+            <span class="fighter-label" id="playerFighterLabel">You</span>
+          </div>
+
+          <div class="vs-divider" id="vsDivider">VS</div>
+
+          <div class="fighter cpu" id="cpuHand">
+            <div class="hand-emoji" id="cpuEmoji">✊</div>
+            <span class="fighter-label" id="opponentFighterLabel">CPU</span>
+          </div>
+        </div>
+
+        <p class="result-banner" id="resultBanner">Choose your move</p>
+
+        <div class="choices">
+          <button class="choice-btn" data-choice="rock" aria-label="Play Rock">
+            <span class="choice-emoji">✊</span>
+            <span class="choice-name">Rock</span>
+          </button>
+          <button class="choice-btn" data-choice="paper" aria-label="Play Paper">
+            <span class="choice-emoji">✋</span>
+            <span class="choice-name">Paper</span>
+          </button>
+          <button class="choice-btn" data-choice="scissors" aria-label="Play Scissors">
+            <span class="choice-emoji">✌️</span>
+            <span class="choice-name">Scissors</span>
+          </button>
+        </div>
+
+        <button class="reset-btn" id="resetBtn">Reset Match</button>
+        <p class="hint">Tip: keys 1 / 2 / 3 also work</p>
+      </main>
+    </section>
+
+  </div>
+
   <div class="confetti-layer" id="confettiLayer"></div>
 
-  <!-- Link the JS file -->
+  <!-- PeerJS: WebRTC peer-to-peer connections, no backend server needed -->
+  <script src="https://unpkg.com/peerjs@1/dist/peerjs.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
