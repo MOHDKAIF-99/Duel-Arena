@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rock Paper Scissors — Duel Arena</title>
+
+  <!-- Fonts: Orbitron for the arcade-style headings, Inter for readable body text -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Link the CSS file -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Subtle retro CRT scanline overlay, purely decorative -->
+  <div class="scanlines"></div>
+
+  <!-- Scoreboard -->
+  <header class="scoreboard">
+    <div class="score-box you">
+      <span class="score-label">You</span>
+      <span class="score-value" id="playerScore">0</span>
+    </div>
+    <div class="score-box round">
+      <span class="score-label">Round</span>
+      <span class="score-value" id="roundCount">0</span>
+    </div>
+    <div class="score-box cpu">
+      <span class="score-label">CPU</span>
+      <span class="score-value" id="cpuScore">0</span>
+    </div>
+  </header>
+
+  <main class="arena" id="arena">
+    <h1 class="title">ROCK <span class="dash">/</span> PAPER <span class="dash">/</span> SCISSORS</h1>
+
+    <!-- The duel: player hand, VS divider, CPU hand -->
+    <div class="duel" id="duel">
+      <div class="fighter player" id="playerHand">
+        <div class="hand-emoji" id="playerEmoji">✊</div>
+        <span class="fighter-label">You</span>
+      </div>
+
+      <div class="vs-divider" id="vsDivider">VS</div>
+
+      <div class="fighter cpu" id="cpuHand">
+        <div class="hand-emoji" id="cpuEmoji">✊</div>
+        <span class="fighter-label">CPU</span>
+      </div>
+    </div>
+
+    <p class="result-banner" id="resultBanner">Choose your move</p>
+
+    <!-- Choice buttons -->
+    <div class="choices">
+      <button class="choice-btn" data-choice="rock" aria-label="Play Rock">
+        <span class="choice-emoji">✊</span>
+        <span class="choice-name">Rock</span>
+      </button>
+      <button class="choice-btn" data-choice="paper" aria-label="Play Paper">
+        <span class="choice-emoji">✋</span>
+        <span class="choice-name">Paper</span>
+      </button>
+      <button class="choice-btn" data-choice="scissors" aria-label="Play Scissors">
+        <span class="choice-emoji">✌️</span>
+        <span class="choice-name">Scissors</span>
+      </button>
+    </div>
+
+    <button class="reset-btn" id="resetBtn">Reset Match</button>
+    <p class="hint">Tip: keys 1 / 2 / 3 also work</p>
+  </main>
+
+  <!-- Confetti particles get injected here by JS on a win -->
+  <div class="confetti-layer" id="confettiLayer"></div>
+
+  <!-- Link the JS file -->
+  <script src="script.js"></script>
+</body>
+</html>
