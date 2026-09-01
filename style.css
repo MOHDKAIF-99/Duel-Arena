@@ -458,6 +458,7 @@ body {
   padding: 6px 10px;
 }
 .reset-btn:hover { color: var(--text-light); }
+.reset-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .hint { margin-top: 8px; font-size: 0.7rem; color: var(--text-dim); }
 
