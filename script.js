@@ -196,6 +196,18 @@ vsComputerBtn.addEventListener('click', () => {
   cleanupConnection();
   currentMode = 'cpu';
   scores = loadCpuScores();
+
+  // If there's a saved match in progress, let the player choose to continue it
+  // or start fresh — instead of silently resuming it every time.
+  if (scores.round > 0) {
+    const continuePrevious = window.confirm(
+      `You have a game in progress (Round ${scores.round}, ${scores.player}-${scores.cpu}).\n\nPress OK to continue it, or Cancel to start a New Game.`
+    );
+    if (!continuePrevious) {
+      scores = { player: 0, cpu: 0, round: 0 };
+      saveCpuScores();
+    }
+  }
   renderScores();
 
   opponentProfile = null;
@@ -393,7 +405,6 @@ function renderScores() {
 }
 
 function updateScores(result) {
-  scores.round += 1;
   if (result === 'win') scores.player += 1;
   if (result === 'lose') scores.cpu += 1;
   if (currentMode === 'cpu') saveCpuScores();
@@ -429,6 +440,12 @@ function handleChoiceClick(choice) {
   if (currentMode === 'online' && (!conn || !conn.open)) return;
 
   isPlaying = true;
+
+  // Show the new round number right away, before the hands even start shaking
+  scores.round += 1;
+  if (currentMode === 'cpu') saveCpuScores();
+  renderScores();
+
   setButtonsEnabled(false);
   clearEffects();
   resultBannerEl.textContent = 'Rock... Paper... Scissors...';
