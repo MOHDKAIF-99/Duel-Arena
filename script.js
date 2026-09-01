@@ -339,8 +339,10 @@ function handleIncomingMessage(data) {
   } else if (data.type === 'choice') {
     opponentChoice = data.choice;
     maybeResolveRound();
-  } else if (data.type === 'reset') {
-    performReset(false);
+  } else if (data.type === 'reset-request') {
+    handleResetRequest();
+  } else if (data.type === 'reset-response') {
+    handleResetResponse(data.accepted);
   }
 }
 
@@ -529,15 +531,45 @@ function spawnConfetti() {
   }
 }
 
-// ---------- Reset match ----------
-function performReset(broadcast) {
+// ---------- New Game ----------
+// CPU mode resets instantly. Online mode asks the opponent first, so a game
+// never resets out from under someone without them knowing.
+function resetMatchNow() {
   scores = { player: 0, cpu: 0, round: 0 };
   if (currentMode === 'cpu') saveCpuScores();
   renderScores();
   resetRoundState();
-  if (broadcast && currentMode === 'online') sendMessage({ type: 'reset' });
 }
-resetBtn.addEventListener('click', () => performReset(true));
+
+resetBtn.addEventListener('click', () => {
+  if (currentMode === 'cpu') {
+    resetMatchNow();
+    return;
+  }
+  if (!conn || !conn.open) return;
+
+  resetBtn.disabled = true;
+  resultBannerEl.textContent = `Waiting for ${opponentProfile?.name || 'your opponent'} to accept...`;
+  resultBannerEl.className = 'result-banner';
+  sendMessage({ type: 'reset-request' });
+});
+
+function handleResetRequest() {
+  const requesterName = opponentProfile?.name || 'Your opponent';
+  const accepted = window.confirm(`${requesterName} wants to start a New Game (this resets the score). Accept?`);
+  sendMessage({ type: 'reset-response', accepted });
+  if (accepted) resetMatchNow();
+}
+
+function handleResetResponse(accepted) {
+  resetBtn.disabled = false;
+  if (accepted) {
+    resetMatchNow();
+  } else {
+    resultBannerEl.textContent = `${opponentProfile?.name || 'Your opponent'} declined the New Game request.`;
+    resultBannerEl.className = 'result-banner';
+  }
+}
 
 // ---------- Choice buttons + keyboard shortcuts ----------
 choiceButtons.forEach((btn) => {
