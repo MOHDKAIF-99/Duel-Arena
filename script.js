@@ -1,31 +1,30 @@
 // =========================================================
 // ROCK PAPER SCISSORS — DUEL ARENA
-// Now with: profiles, avatars, and online multiplayer (PeerJS)
+// Profiles, avatars, online multiplayer, 7s timer, tournaments, commentary
 // =========================================================
 
 const CHOICES = ['rock', 'paper', 'scissors'];
-const EMOJI = { rock: '✊', paper: '✋', scissors: '✌️' };
-const BEATS = { rock: 'scissors', paper: 'rock', scissors: 'paper' }; // key beats value
-const SHAKE_TIME = 550; // ms hands "think" before revealing
-const PEER_PREFIX = 'rps-duel-'; // namespaces our room codes on the shared PeerJS broker
+const EMOJI = { rock: '✊', paper: '✋', scissors: '✌️', timeout: '⌛' };
+const BEATS = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
+const SHAKE_TIME = 550;
+const TIMER_SECONDS = 7;
+const PEER_PREFIX = 'rps-duel-';
 
-// ---------- DOM references ----------
+// ---------- DOM ----------
 const screens = document.querySelectorAll('.screen');
-
-// Profile screen
 const avatarPreview = document.getElementById('avatarPreview');
 const avatarUpload = document.getElementById('avatarUpload');
 const uploadAvatarBtn = document.getElementById('uploadAvatarBtn');
 const emojiButtons = document.querySelectorAll('.emoji-option');
 const nameInput = document.getElementById('nameInput');
 const profileContinueBtn = document.getElementById('profileContinueBtn');
-
-// Mode screen
 const vsComputerBtn = document.getElementById('vsComputerBtn');
 const vsOnlineBtn = document.getElementById('vsOnlineBtn');
 const editProfileFromModeBtn = document.getElementById('editProfileFromModeBtn');
-
-// Online lobby screen
+const lengthButtons = document.querySelectorAll('.length-btn');
+const customLengthInput = document.getElementById('customLengthInput');
+const customLengthBtn = document.getElementById('customLengthBtn');
+const backToModeFromTournamentBtn = document.getElementById('backToModeFromTournamentBtn');
 const hostTabBtn = document.getElementById('hostTabBtn');
 const joinTabBtn = document.getElementById('joinTabBtn');
 const hostPanel = document.getElementById('hostPanel');
@@ -37,8 +36,6 @@ const joinCodeInput = document.getElementById('joinCodeInput');
 const joinBtn = document.getElementById('joinBtn');
 const joinStatusText = document.getElementById('joinStatusText');
 const backToModeBtn = document.getElementById('backToModeBtn');
-
-// Game screen
 const leaveGameBtn = document.getElementById('leaveGameBtn');
 const editProfileFromGameBtn = document.getElementById('editProfileFromGameBtn');
 const connectionPill = document.getElementById('connectionPill');
@@ -56,18 +53,32 @@ const cpuHandEl = document.getElementById('cpuHand');
 const playerFighterLabel = document.getElementById('playerFighterLabel');
 const opponentFighterLabel = document.getElementById('opponentFighterLabel');
 const resultBannerEl = document.getElementById('resultBanner');
+const commentaryText = document.getElementById('commentaryText');
+const timerWrap = document.getElementById('timerWrap');
+const timerFill = document.getElementById('timerFill');
+const timerText = document.getElementById('timerText');
 const arenaEl = document.getElementById('arena');
 const choiceButtons = document.querySelectorAll('.choice-btn');
 const resetBtn = document.getElementById('resetBtn');
 const confettiLayer = document.getElementById('confettiLayer');
+const summaryWinner = document.getElementById('summaryWinner');
+const summaryScore = document.getElementById('summaryScore');
+const summaryRounds = document.getElementById('summaryRounds');
+const summaryWinStreak = document.getElementById('summaryWinStreak');
+const summaryLoseStreak = document.getElementById('summaryLoseStreak');
+const summaryAvgTime = document.getElementById('summaryAvgTime');
+const playAgainBtn = document.getElementById('playAgainBtn');
+const summaryBackBtn = document.getElementById('summaryBackBtn');
 
-// ---------- App state ----------
-let currentMode = 'cpu';       // 'cpu' | 'online'
-let cameFrom = 'screen-mode';  // where to return after editing the profile
-let pendingAvatar = '😀';      // avatar being chosen on the profile screen
+// ---------- State ----------
+let currentMode = 'cpu';
+let cameFrom = 'screen-mode';
+let pendingAvatar = '😀';
+let pendingMode = null;
+let isHost = false;
 
-let peer = null;               // our PeerJS Peer instance
-let conn = null;               // the active DataConnection to the other player
+let peer = null;
+let conn = null;
 let isOnline = false;
 let opponentProfile = null;
 
@@ -77,41 +88,38 @@ let myChoice = null;
 let opponentChoice = null;
 let resolving = false;
 
-// =========================================================
-// Screen navigation
-// =========================================================
+let tournamentLength = null;
+let currentStreakType = null;
+let currentStreakCount = 0;
+let longestWinStreak = 0;
+let longestLoseStreak = 0;
+let decisionTimes = [];
+
+let timerInterval = null;
+let timerTicks = 0;
+let roundStartTime = null;
+
+// ---------- Screen nav ----------
 function showScreen(id) {
   screens.forEach((s) => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
 }
 
-// =========================================================
-// Profile: load / save / render
-// =========================================================
+// ---------- Profile ----------
 function loadProfile() {
   const saved = localStorage.getItem('rps-profile');
   return saved ? JSON.parse(saved) : { name: 'Player', avatar: '😀' };
 }
-
-function saveProfile(profile) {
-  localStorage.setItem('rps-profile', JSON.stringify(profile));
-}
-
+function saveProfile(profile) { localStorage.setItem('rps-profile', JSON.stringify(profile)); }
 let myProfile = loadProfile();
 
-// Renders either an emoji string or a data:image base64 avatar into an element
 function renderAvatar(el, value) {
-  if (value && value.startsWith('data:')) {
-    el.innerHTML = `<img src="${value}" alt="avatar">`;
-  } else {
-    el.textContent = value || '🙂';
-  }
+  if (value && value.startsWith('data:')) el.innerHTML = `<img src="${value}" alt="avatar">`;
+  else el.textContent = value || '🙂';
 }
-
 function markSelectedEmoji(value) {
   emojiButtons.forEach((b) => b.classList.toggle('selected', b.dataset.emoji === value));
 }
-
 function openProfileEditor(from) {
   cameFrom = from;
   nameInput.value = myProfile.name;
@@ -120,44 +128,35 @@ function openProfileEditor(from) {
   markSelectedEmoji(pendingAvatar);
   showScreen('screen-profile');
 }
-
 function updateOwnDisplay() {
   youNameLabel.textContent = myProfile.name;
   playerFighterLabel.textContent = myProfile.name;
   renderAvatar(youAvatarBox, myProfile.avatar);
 }
 
-// ---------- Profile screen events ----------
 uploadAvatarBtn.addEventListener('click', () => avatarUpload.click());
-
 avatarUpload.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file || !file.type.startsWith('image/')) return;
-
   const reader = new FileReader();
   reader.onload = (ev) => {
     const img = new Image();
     img.onload = () => {
-      // Crop to a square and shrink it so it's cheap to send over the network
       const size = 120;
       const canvas = document.createElement('canvas');
-      canvas.width = size;
-      canvas.height = size;
+      canvas.width = size; canvas.height = size;
       const ctx = canvas.getContext('2d');
       const scale = Math.max(size / img.width, size / img.height);
-      const w = img.width * scale;
-      const h = img.height * scale;
+      const w = img.width * scale, h = img.height * scale;
       ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-
       pendingAvatar = canvas.toDataURL('image/jpeg', 0.85);
       renderAvatar(avatarPreview, pendingAvatar);
-      markSelectedEmoji(null); // clear emoji selection, a photo is now chosen
+      markSelectedEmoji(null);
     };
     img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
 });
-
 emojiButtons.forEach((btn) => {
   btn.addEventListener('click', () => {
     pendingAvatar = btn.dataset.emoji;
@@ -165,51 +164,64 @@ emojiButtons.forEach((btn) => {
     markSelectedEmoji(pendingAvatar);
   });
 });
-
 profileContinueBtn.addEventListener('click', () => {
   const name = nameInput.value.trim().slice(0, 16) || 'Player';
   myProfile = { name, avatar: pendingAvatar || '😀' };
   saveProfile(myProfile);
-
   if (cameFrom === 'screen-game') {
     updateOwnDisplay();
     if (isOnline) sendMessage({ type: 'profile', name: myProfile.name, avatar: myProfile.avatar });
   }
   showScreen(cameFrom);
 });
-
 editProfileFromModeBtn.addEventListener('click', () => openProfileEditor('screen-mode'));
 editProfileFromGameBtn.addEventListener('click', () => openProfileEditor('screen-game'));
 
-// =========================================================
-// Mode select
-// =========================================================
+// ---------- Mode + tournament length ----------
+vsComputerBtn.addEventListener('click', () => { pendingMode = 'cpu'; showScreen('screen-tournament'); });
+vsOnlineBtn.addEventListener('click', () => { pendingMode = 'online'; showScreen('screen-tournament'); });
+
+lengthButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const len = parseInt(btn.dataset.length, 10);
+    tournamentLength = len > 0 ? len : null;
+    beginMatchFlow();
+  });
+});
+customLengthBtn.addEventListener('click', () => {
+  const val = parseInt(customLengthInput.value, 10);
+  tournamentLength = (val && val > 0) ? val : null;
+  beginMatchFlow();
+});
+backToModeFromTournamentBtn.addEventListener('click', () => showScreen('screen-mode'));
+
+function beginMatchFlow() {
+  if (pendingMode === 'cpu') startCpuMatch();
+  else { showScreen('screen-online-lobby'); switchLobbyTab('host'); }
+}
+
 function loadCpuScores() {
   const saved = localStorage.getItem('rps-scores');
   return saved ? JSON.parse(saved) : { player: 0, cpu: 0, round: 0 };
 }
-function saveCpuScores() {
-  localStorage.setItem('rps-scores', JSON.stringify(scores));
-}
+function saveCpuScores() { localStorage.setItem('rps-scores', JSON.stringify(scores)); }
 
-vsComputerBtn.addEventListener('click', () => {
+function startCpuMatch() {
   cleanupConnection();
   currentMode = 'cpu';
-  scores = loadCpuScores();
 
-  // If there's a saved match in progress, let the player choose to continue it
-  // or start fresh — instead of silently resuming it every time.
-  if (scores.round > 0) {
-    const continuePrevious = window.confirm(
-      `You have a game in progress (Round ${scores.round}, ${scores.player}-${scores.cpu}).\n\nPress OK to continue it, or Cancel to start a New Game.`
-    );
-    if (!continuePrevious) {
-      scores = { player: 0, cpu: 0, round: 0 };
-      saveCpuScores();
+  if (tournamentLength) {
+    scores = { player: 0, cpu: 0, round: 0 };
+    saveCpuScores();
+  } else {
+    scores = loadCpuScores();
+    if (scores.round > 0) {
+      const cont = window.confirm(`You have a game in progress (Round ${scores.round}, ${scores.player}-${scores.cpu}).\n\nPress OK to continue it, or Cancel to start a New Game.`);
+      if (!cont) { scores = { player: 0, cpu: 0, round: 0 }; saveCpuScores(); }
     }
   }
+  resetMatchStats();
   renderScores();
-
   opponentProfile = null;
   opponentNameLabel.textContent = 'CPU';
   opponentFighterLabel.textContent = 'CPU';
@@ -218,61 +230,38 @@ vsComputerBtn.addEventListener('click', () => {
   updateOwnDisplay();
   resetRoundState();
   showScreen('screen-game');
-});
+}
 
-vsOnlineBtn.addEventListener('click', () => {
-  showScreen('screen-online-lobby');
-  switchLobbyTab('host');
-});
-
-// =========================================================
-// Online lobby
-// =========================================================
+// ---------- Online lobby ----------
 function switchLobbyTab(tab) {
   if (tab === 'host') {
-    hostTabBtn.classList.add('active');
-    joinTabBtn.classList.remove('active');
-    hostPanel.classList.remove('hidden');
-    joinPanel.classList.add('hidden');
+    hostTabBtn.classList.add('active'); joinTabBtn.classList.remove('active');
+    hostPanel.classList.remove('hidden'); joinPanel.classList.add('hidden');
     if (!peer) hostGame();
   } else {
-    joinTabBtn.classList.add('active');
-    hostTabBtn.classList.remove('active');
-    joinPanel.classList.remove('hidden');
-    hostPanel.classList.add('hidden');
-    // Cancel an unused hosted room if we're switching away from it
-    if (peer && !conn) {
-      peer.destroy();
-      peer = null;
-    }
+    joinTabBtn.classList.add('active'); hostTabBtn.classList.remove('active');
+    joinPanel.classList.remove('hidden'); hostPanel.classList.add('hidden');
+    if (peer && !conn) { peer.destroy(); peer = null; }
   }
 }
 hostTabBtn.addEventListener('click', () => switchLobbyTab('host'));
 joinTabBtn.addEventListener('click', () => switchLobbyTab('join'));
-
-backToModeBtn.addEventListener('click', () => {
-  cleanupConnection();
-  showScreen('screen-mode');
-});
+backToModeBtn.addEventListener('click', () => { cleanupConnection(); showScreen('screen-mode'); });
 
 function generateRoomCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no O/0 or I/1, easy to read aloud
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
   return code;
 }
 
 function hostGame() {
+  isHost = true;
   const code = generateRoomCode();
   roomCodeDisplay.textContent = code;
   hostStatusText.textContent = 'Setting up your room...';
-
   peer = new Peer(PEER_PREFIX + code);
-
-  peer.on('open', () => {
-    hostStatusText.textContent = 'Waiting for your friend to join...';
-  });
-
+  peer.on('open', () => { hostStatusText.textContent = 'Waiting for your friend to join...'; });
   peer.on('connection', (connection) => {
     conn = connection;
     hostStatusText.textContent = 'Opponent found — connecting...';
@@ -280,55 +269,39 @@ function hostGame() {
     conn.on('close', handleDisconnect);
     conn.on('open', startOnlineMatch);
   });
-
   peer.on('error', (err) => {
-    if (err.type === 'unavailable-id') {
-      hostGame(); // extremely rare code collision — just try a new one
-    } else {
-      hostStatusText.textContent = 'Connection error — try again.';
-    }
+    if (err.type === 'unavailable-id') hostGame();
+    else hostStatusText.textContent = 'Connection error — try again.';
   });
 }
 
 function joinGame() {
+  isHost = false;
   const code = joinCodeInput.value.trim().toUpperCase();
-  if (code.length !== 6) {
-    joinStatusText.textContent = "Enter the 6-character code your friend shared.";
-    return;
-  }
+  if (code.length !== 6) { joinStatusText.textContent = 'Enter the 6-character code your friend shared.'; return; }
   joinStatusText.textContent = 'Connecting...';
-
   peer = new Peer();
   peer.on('open', () => {
     conn = peer.connect(PEER_PREFIX + code, { reliable: true });
     conn.on('data', handleIncomingMessage);
     conn.on('close', handleDisconnect);
     conn.on('open', startOnlineMatch);
-    conn.on('error', () => {
-      joinStatusText.textContent = "Couldn't reach that code. Check it and try again.";
-    });
+    conn.on('error', () => { joinStatusText.textContent = "Couldn't reach that code. Check it and try again."; });
   });
-
   peer.on('error', (err) => {
-    joinStatusText.textContent = err.type === 'peer-unavailable'
-      ? 'No game found with that code. Check it and try again.'
-      : 'Connection error — try again.';
+    joinStatusText.textContent = err.type === 'peer-unavailable' ? 'No game found with that code. Check it and try again.' : 'Connection error — try again.';
   });
 }
 joinBtn.addEventListener('click', joinGame);
 joinCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinGame(); });
-
 copyCodeBtn.addEventListener('click', () => {
-  const code = roomCodeDisplay.textContent;
-  navigator.clipboard?.writeText(code).then(() => {
+  navigator.clipboard?.writeText(roomCodeDisplay.textContent).then(() => {
     copyCodeBtn.textContent = 'Copied!';
     setTimeout(() => { copyCodeBtn.textContent = 'Copy Code'; }, 1500);
   });
 });
 
-function sendMessage(obj) {
-  if (conn && conn.open) conn.send(obj);
-}
+function sendMessage(obj) { if (conn && conn.open) conn.send(obj); }
 
 function handleIncomingMessage(data) {
   if (data.type === 'profile') {
@@ -336,6 +309,9 @@ function handleIncomingMessage(data) {
     opponentNameLabel.textContent = opponentProfile.name;
     opponentFighterLabel.textContent = opponentProfile.name;
     renderAvatar(opponentAvatarBox, opponentProfile.avatar);
+  } else if (data.type === 'tournament-config') {
+    tournamentLength = data.length || null;
+    renderScores();
   } else if (data.type === 'choice') {
     opponentChoice = data.choice;
     maybeResolveRound();
@@ -347,93 +323,137 @@ function handleIncomingMessage(data) {
 }
 
 function handleDisconnect() {
+  stopTimer();
   updateConnectionPill('Disconnected', 'bad');
   resultBannerEl.textContent = 'Your friend disconnected.';
   resultBannerEl.className = 'result-banner';
   setButtonsEnabled(false);
 }
-
 function cleanupConnection() {
   if (conn) { try { conn.close(); } catch (e) {} conn = null; }
   if (peer) { try { peer.destroy(); } catch (e) {} peer = null; }
   isOnline = false;
 }
-
 function startOnlineMatch() {
   currentMode = 'online';
   isOnline = true;
-
   opponentProfile = null;
   opponentNameLabel.textContent = 'Waiting...';
   opponentFighterLabel.textContent = 'Opponent';
   renderAvatar(opponentAvatarBox, '❓');
   updateConnectionPill('Connected 🟢', 'good');
   updateOwnDisplay();
-
   scores = { player: 0, cpu: 0, round: 0 };
+  resetMatchStats();
   renderScores();
   resetRoundState();
-
   sendMessage({ type: 'profile', name: myProfile.name, avatar: myProfile.avatar });
+  if (isHost) sendMessage({ type: 'tournament-config', length: tournamentLength });
   showScreen('screen-game');
 }
-
-leaveGameBtn.addEventListener('click', () => {
-  cleanupConnection();
-  showScreen('screen-mode');
-});
-
+leaveGameBtn.addEventListener('click', () => { stopTimer(); cleanupConnection(); showScreen('screen-mode'); });
 function updateConnectionPill(text, tone) {
   connectionPill.textContent = text;
   connectionPill.className = 'connection-pill ' + (tone || 'neutral');
 }
 
-// =========================================================
-// Core game rules (shared by both modes)
-// =========================================================
-function getCpuChoice() {
-  return CHOICES[Math.floor(Math.random() * CHOICES.length)];
-}
-
+// ---------- Core rules ----------
+function getCpuChoice() { return CHOICES[Math.floor(Math.random() * CHOICES.length)]; }
 function getResult(mine, theirs) {
+  if (mine === 'timeout' && theirs === 'timeout') return 'tie';
+  if (mine === 'timeout') return 'lose';
+  if (theirs === 'timeout') return 'win';
   if (mine === theirs) return 'tie';
   return BEATS[mine] === theirs ? 'win' : 'lose';
 }
-
 function renderScores() {
   playerScoreEl.textContent = scores.player;
   cpuScoreEl.textContent = scores.cpu;
-  roundCountEl.textContent = scores.round;
+  roundCountEl.textContent = tournamentLength ? `${scores.round}/${tournamentLength}` : scores.round;
 }
-
 function updateScores(result) {
   if (result === 'win') scores.player += 1;
   if (result === 'lose') scores.cpu += 1;
   if (currentMode === 'cpu') saveCpuScores();
   renderScores();
 }
-
-function setButtonsEnabled(enabled) {
-  choiceButtons.forEach((btn) => { btn.disabled = !enabled; });
-}
-
+function setButtonsEnabled(enabled) { choiceButtons.forEach((btn) => { btn.disabled = !enabled; }); }
 function clearEffects() {
   playerHandEl.classList.remove('impact-win', 'impact-tie');
   cpuHandEl.classList.remove('impact-win', 'impact-tie');
   arenaEl.classList.remove('shake-fail');
 }
-
 function resetRoundState() {
-  myChoice = null;
-  opponentChoice = null;
-  resolving = false;
-  isPlaying = false;
+  myChoice = null; opponentChoice = null; resolving = false; isPlaying = false;
   resultBannerEl.textContent = 'Choose your move';
   resultBannerEl.className = 'result-banner';
-  playerEmojiEl.textContent = '✊';
-  cpuEmojiEl.textContent = '✊';
+  commentaryText.textContent = '';
+  commentaryText.className = 'commentary';
+  playerEmojiEl.textContent = '✊'; cpuEmojiEl.textContent = '✊';
   clearEffects();
   setButtonsEnabled(true);
+  startTimer();
+}
+
+// ---------- 7-second timer ----------
+function startTimer() {
+  stopTimer();
+  roundStartTime = Date.now();
+  timerTicks = TIMER_SECONDS * 10;
+  updateTimerDisplay();
+  timerInterval = setInterval(() => {
+    timerTicks -= 1;
+    updateTimerDisplay();
+    if (timerTicks <= 0) { stopTimer(); handleChoiceClick('timeout'); }
+  }, 100);
+}
+function stopTimer() {
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+}
+function updateTimerDisplay() {
+  const secondsLeft = Math.max(0, Math.ceil(timerTicks / 10));
+  timerText.textContent = secondsLeft + 's';
+  timerFill.style.width = Math.max(0, (timerTicks / (TIMER_SECONDS * 10)) * 100) + '%';
+  timerWrap.classList.toggle('urgent', secondsLeft <= 2);
+}
+
+// ---------- Streaks + commentary ----------
+function resetMatchStats() {
+  currentStreakType = null; currentStreakCount = 0;
+  longestWinStreak = 0; longestLoseStreak = 0;
+  decisionTimes = [];
+}
+function updateStreak(result) {
+  if (result === currentStreakType) currentStreakCount += 1;
+  else { currentStreakType = result; currentStreakCount = 1; }
+  if (result === 'win') longestWinStreak = Math.max(longestWinStreak, currentStreakCount);
+  if (result === 'lose') longestLoseStreak = Math.max(longestLoseStreak, currentStreakCount);
+}
+const WIN_COMMENTS = {
+  2: ['Nice! Two in a row.', "You're finding your rhythm!"],
+  3: ["You're on fire! 🔥", 'Incredible reads!'],
+  4: ["Unstoppable! You're a genius at this! 🧠", 'Wow, amazing streak!']
+};
+const LOSE_COMMENTS = {
+  2: ['Uh oh, two in a row.', 'Shake it off!'],
+  3: ["Stay focused — you've got this.", 'The comeback starts now.'],
+  4: ["Tough stretch... don't give up! 💪", 'Regroup and refocus.']
+};
+function pickComment(pool, streakCount) {
+  const tier = Math.min(streakCount, 4);
+  const options = pool[tier];
+  return options ? options[Math.floor(Math.random() * options.length)] : '';
+}
+function showCommentary() {
+  if (currentStreakType === 'win' && currentStreakCount >= 2) {
+    commentaryText.textContent = pickComment(WIN_COMMENTS, currentStreakCount);
+    commentaryText.className = 'commentary is-good';
+  } else if (currentStreakType === 'lose' && currentStreakCount >= 2) {
+    commentaryText.textContent = pickComment(LOSE_COMMENTS, currentStreakCount);
+    commentaryText.className = 'commentary is-bad';
+  } else {
+    commentaryText.textContent = ''; commentaryText.className = 'commentary';
+  }
 }
 
 // ---------- Playing a round ----------
@@ -441,16 +461,20 @@ function handleChoiceClick(choice) {
   if (isPlaying) return;
   if (currentMode === 'online' && (!conn || !conn.open)) return;
 
-  isPlaying = true;
+  stopTimer();
+  if (roundStartTime != null) {
+    decisionTimes.push(Math.min(TIMER_SECONDS, (Date.now() - roundStartTime) / 1000));
+    roundStartTime = null;
+  }
 
-  // Show the new round number right away, before the hands even start shaking
+  isPlaying = true;
   scores.round += 1;
   if (currentMode === 'cpu') saveCpuScores();
   renderScores();
 
   setButtonsEnabled(false);
   clearEffects();
-  resultBannerEl.textContent = 'Rock... Paper... Scissors...';
+  resultBannerEl.textContent = choice === 'timeout' ? "Time's up!" : 'Rock... Paper... Scissors...';
   resultBannerEl.className = 'result-banner';
   playerHandEl.classList.add('shaking');
   cpuHandEl.classList.add('shaking');
@@ -465,58 +489,56 @@ function handleChoiceClick(choice) {
     maybeResolveRound();
   }
 }
-
-// Called after sending our choice AND after receiving the opponent's —
-// only proceeds once both sides of the round are known
 function maybeResolveRound() {
   if (currentMode === 'online' && myChoice && opponentChoice && !resolving) {
     resolving = true;
     setTimeout(() => {
       finishRound(myChoice, opponentChoice);
-      myChoice = null;
-      opponentChoice = null;
-      resolving = false;
+      myChoice = null; opponentChoice = null; resolving = false;
     }, SHAKE_TIME);
   }
 }
-
 function finishRound(mine, theirs) {
   const result = getResult(mine, theirs);
-
   playerHandEl.classList.remove('shaking');
   cpuHandEl.classList.remove('shaking');
   playerEmojiEl.textContent = EMOJI[mine];
   cpuEmojiEl.textContent = EMOJI[theirs];
 
-  applyResultEffects(result);
+  applyResultEffects(result, mine, theirs);
   updateScores(result);
+  updateStreak(result);
+  showCommentary();
 
   setTimeout(() => {
-    setButtonsEnabled(true);
-    isPlaying = false;
+    if (tournamentLength && scores.round >= tournamentLength) {
+      endTournament();
+    } else {
+      setButtonsEnabled(true);
+      isPlaying = false;
+      startTimer();
+    }
   }, 700);
 }
-
-function applyResultEffects(result) {
+function applyResultEffects(result, mine, theirs) {
+  const label = currentMode === 'online' ? (opponentProfile?.name || 'Opponent') : 'CPU';
   if (result === 'win') {
-    resultBannerEl.textContent = 'You win the round! 🎉';
+    resultBannerEl.textContent = theirs === 'timeout' ? `${label} ran out of time — you win! 🎉` : 'You win the round! 🎉';
     resultBannerEl.classList.add('is-win');
     playerHandEl.classList.add('impact-win');
     spawnConfetti();
   } else if (result === 'lose') {
-    const label = currentMode === 'online' ? (opponentProfile?.name || 'Opponent') : 'CPU';
-    resultBannerEl.textContent = `${label} wins the round.`;
+    resultBannerEl.textContent = mine === 'timeout' ? `Time's up! ${label} wins the round.` : `${label} wins the round.`;
     resultBannerEl.classList.add('is-lose');
     cpuHandEl.classList.add('impact-win');
     arenaEl.classList.add('shake-fail');
   } else {
-    resultBannerEl.textContent = "It's a tie — go again!";
+    resultBannerEl.textContent = (mine === 'timeout' && theirs === 'timeout') ? "Both ran out of time — it's a tie!" : "It's a tie — go again!";
     resultBannerEl.classList.add('is-tie');
     playerHandEl.classList.add('impact-tie');
     cpuHandEl.classList.add('impact-tie');
   }
 }
-
 function spawnConfetti() {
   const colors = ['#4CE0D2', '#FF4D8D', '#FFC145', '#EDEFF7'];
   for (let i = 0; i < 36; i++) {
@@ -531,63 +553,75 @@ function spawnConfetti() {
   }
 }
 
-// ---------- New Game ----------
-// CPU mode resets instantly. Online mode asks the opponent first, so a game
-// never resets out from under someone without them knowing.
+// ---------- Tournament summary ----------
+function endTournament() {
+  stopTimer();
+  setButtonsEnabled(false);
+  isPlaying = true;
+  const opponentName = currentMode === 'online' ? (opponentProfile?.name || 'Opponent') : 'CPU';
+  let winnerText;
+  if (scores.player > scores.cpu) winnerText = `🏆 ${myProfile.name} Wins the Tournament!`;
+  else if (scores.cpu > scores.player) winnerText = `🏆 ${opponentName} Wins the Tournament!`;
+  else winnerText = "🤝 It's a Tie Tournament!";
+  const avg = decisionTimes.length ? (decisionTimes.reduce((a, b) => a + b, 0) / decisionTimes.length).toFixed(1) : '0.0';
+  summaryWinner.textContent = winnerText;
+  summaryScore.textContent = `${scores.player} - ${scores.cpu}`;
+  summaryRounds.textContent = scores.round;
+  summaryWinStreak.textContent = longestWinStreak;
+  summaryLoseStreak.textContent = longestLoseStreak;
+  summaryAvgTime.textContent = `${avg}s`;
+  showScreen('screen-summary');
+}
+
+// ---------- New Game / Play Again ----------
 function resetMatchNow() {
   scores = { player: 0, cpu: 0, round: 0 };
   if (currentMode === 'cpu') saveCpuScores();
+  resetMatchStats();
   renderScores();
   resetRoundState();
 }
-
-resetBtn.addEventListener('click', () => {
-  if (currentMode === 'cpu') {
-    resetMatchNow();
-    return;
-  }
-  if (!conn || !conn.open) return;
-
+function requestNewGame() {
+  if (currentMode === 'cpu') { resetMatchNow(); showScreen('screen-game'); return; }
+  if (!conn || !conn.open) { showScreen('screen-mode'); return; }
   resetBtn.disabled = true;
+  sendMessage({ type: 'reset-request' });
   resultBannerEl.textContent = `Waiting for ${opponentProfile?.name || 'your opponent'} to accept...`;
   resultBannerEl.className = 'result-banner';
-  sendMessage({ type: 'reset-request' });
-});
-
+}
 function handleResetRequest() {
   const requesterName = opponentProfile?.name || 'Your opponent';
   const accepted = window.confirm(`${requesterName} wants to start a New Game (this resets the score). Accept?`);
   sendMessage({ type: 'reset-response', accepted });
-  if (accepted) resetMatchNow();
+  if (accepted) { resetMatchNow(); showScreen('screen-game'); }
 }
-
 function handleResetResponse(accepted) {
   resetBtn.disabled = false;
   if (accepted) {
     resetMatchNow();
+    showScreen('screen-game');
   } else {
-    resultBannerEl.textContent = `${opponentProfile?.name || 'Your opponent'} declined the New Game request.`;
-    resultBannerEl.className = 'result-banner';
+    window.alert(`${opponentProfile?.name || 'Your opponent'} declined the New Game request.`);
+    if (document.getElementById('screen-game').classList.contains('active')) {
+      resultBannerEl.textContent = `${opponentProfile?.name || 'Your opponent'} declined.`;
+      resultBannerEl.className = 'result-banner';
+    }
   }
 }
+resetBtn.addEventListener('click', requestNewGame);
+playAgainBtn.addEventListener('click', requestNewGame);
+summaryBackBtn.addEventListener('click', () => { stopTimer(); cleanupConnection(); showScreen('screen-mode'); });
 
-// ---------- Choice buttons + keyboard shortcuts ----------
-choiceButtons.forEach((btn) => {
-  btn.addEventListener('click', () => handleChoiceClick(btn.dataset.choice));
-});
-
+// ---------- Choices + keyboard ----------
+choiceButtons.forEach((btn) => btn.addEventListener('click', () => handleChoiceClick(btn.dataset.choice)));
 window.addEventListener('keydown', (e) => {
   if (!document.getElementById('screen-game').classList.contains('active')) return;
   const map = { '1': 'rock', '2': 'paper', '3': 'scissors' };
   if (map[e.key]) handleChoiceClick(map[e.key]);
 });
 
-// =========================================================
-// Startup
-// =========================================================
+// ---------- Startup ----------
 nameInput.value = myProfile.name;
 renderAvatar(avatarPreview, myProfile.avatar);
 markSelectedEmoji(myProfile.avatar);
-
-const hasSavedProfile = !!localStorage.getItem('rps-profile');
-showScreen(hasSavedProfile ? 'screen-mode' : 'screen-profile');
+showScreen(localStorage.getItem('rps-profile') ? 'screen-mode' : 'screen-profile');
