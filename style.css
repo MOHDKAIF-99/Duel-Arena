@@ -546,3 +546,34 @@ body {
     animation: none !important;
   }
 }
+
+/* ---------- Tournament length picker ---------- */
+.length-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; width: 100%; margin-bottom: 18px; }
+.length-btn {
+  background: var(--bg-panel); border: 2px solid var(--bg-panel-2); color: var(--text-light);
+  border-radius: 14px; padding: 14px; font-family: var(--font-body); font-weight: 600;
+  font-size: 0.9rem; cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.length-btn:hover { transform: translateY(-2px); border-color: var(--neon-amber); }
+.length-btn[data-length="0"] { grid-column: 1 / -1; border-color: var(--neon-cyan); }
+
+/* ---------- Commentary ---------- */
+.commentary { font-size: 0.85rem; font-style: italic; min-height: 1.2em; margin-bottom: 12px; color: var(--text-dim); }
+.commentary.is-good { color: var(--neon-amber); }
+.commentary.is-bad { color: var(--neon-magenta); }
+
+/* ---------- Timer ---------- */
+.timer-wrap { width: 100%; max-width: 320px; display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+.timer-bar { flex: 1; height: 8px; background: var(--bg-panel-2); border-radius: 999px; overflow: hidden; }
+.timer-fill { height: 100%; width: 100%; background: var(--neon-cyan); border-radius: 999px; transition: width 0.1s linear, background-color 0.2s ease; }
+.timer-text { font-family: var(--font-display); font-size: 0.85rem; font-weight: 700; color: var(--text-dim); min-width: 28px; text-align: right; }
+.timer-wrap.urgent .timer-fill { background: var(--neon-red); }
+.timer-wrap.urgent .timer-text { color: var(--neon-red); }
+
+/* ---------- Tournament summary ---------- */
+.summary-winner { font-family: var(--font-display); font-size: 1.3rem; font-weight: 800; color: var(--neon-amber); margin-bottom: 20px; text-align: center; }
+.summary-stats { width: 100%; background: var(--bg-panel); border-radius: 16px; padding: 4px 18px; margin-bottom: 20px; }
+.summary-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--bg-panel-2); font-size: 0.88rem; }
+.summary-row:last-child { border-bottom: none; }
+.summary-row span:first-child { color: var(--text-dim); }
+.summary-row span:last-child { font-family: var(--font-display); font-weight: 700; }
